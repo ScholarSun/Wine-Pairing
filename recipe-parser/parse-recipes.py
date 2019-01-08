@@ -2,6 +2,7 @@
 import urllib.request
 import json
 import re
+import time
 import nltk
 from bs4 import BeautifulSoup
 from nltk.tokenize import sent_tokenize
@@ -447,7 +448,6 @@ def transformToCups(amount, unit):
     else:
         return amount
 
-
 # strings indicating ingredient as optional (currently don't use optional boolean for anything)
 # optionalStrings = ['optional', 'to taste', 'as needed', 'if desired']
 
@@ -501,6 +501,8 @@ winePages = [("Albarino and Alvarinho", 1703), ("Barbera", 1704), ("Cabernet Sau
 jsonFile = open("recipes.json", "w")
 jsonFile.truncate()
 
+winepageout = open("winepage.txt", "w")
+
 outputFile = open("output.txt", "w")
 outputFile.truncate()
 
@@ -517,393 +519,432 @@ while "" in allIngredients:
 unlabeledIngredients = set()
 unlabeledRecipes = set()
 
-# recipes start at id~6660 and end at id=~27000
-for recipeId in range(6663, 6664):
-    soup = None
+# Get each wine page
+for wine in winePages:
+    suggestedWine = wine[0]
+    wineID = wine[1]
+    soupWine = None
     try:
-        url = "http://allrecipes.com/recipe/{}".format(recipeId)
+        url = "http://allrecipes.com/recipes/{}".format(wineID)
 
         with urllib.request.urlopen(url) as response:
-            soup = BeautifulSoup(response.read(), "html.parser")
+            soupWine = BeautifulSoup(response.read(), "html.parser")
 
     except urllib.error.HTTPError as e:
-        outputFile.write("{0}: No recipe".format(recipeId))
+        outputFile.write("{0}: No wine page".format(wineID))
         outputFile.write(e.reason)
+        outputFile.write("\n")
     except urllib.error.URLError as e:
-        outputFile.write("{0}: URL ERROR".format(recipeId))
+        outputFile.write("{0}: URL ERROR".format(wineID))
         outputFile.write(e.reason)
+        outputFile.write("\n")
     except SocketError as e:
-        outputFile.write("{0}: SOCKET ERROR".format(recipeId))
+        outputFile.write("{0}: SOCKET ERROR".format(wineID))
+        outputFile.write("\n")
 
-    if soup:
-        titleSpan = soup.find("h1", class_="recipe-summary__h1")
-        servingSpan = soup.find("meta", id="metaRecipeServings")
-        calorieSpan = soup.find("span", class_="calorie-count")
-        directionObjects = soup.find_all("span", class_="recipe-directions__list--item")
-        ingredientObjects = soup.find_all("span", class_="recipe-ingred_txt")
-        footnotesSection = soup.find("section", class_="recipe-footnotes")
-        recipeCategory = soup.find_all("meta", itemprop="recipeCategory")
-        #
-        # get title
-        #
-        title = titleSpan.text
-        title = title.replace("Linguini", "Linguine")
-        title = title.replace("Genoese", "Genoise")
+    print(soupWine)
+    if soupWine:
+        print("hello")
+        recipeLinks = soupWine.find_all("a", class_= "fixed-recipe-card__title-link")
+        print(recipeLinks)
 
-        #
-        # get labels
-        #
-        parsedTitle = title.lower().replace("(", "").replace(")", "").replace("-", " ").split(" ")
-        while "" in parsedTitle:
-            parsedTitle.remove("")
-        allLabels = getRecipeLabels(parsedTitle)
+        for tag in recipeLinks:
+            recipelink = tag['href']
+            print(recipelink)
+            recipeId = recipelink.split("/")[4]
+            time.sleep(1.5)
+            try:
+                url = "http://allrecipes.com/recipe/{}".format(recipeId)
 
-        if len(allLabels) == 0:
-            unlabeledRecipes.add(title)
-        #
-        # get categories
-        #
-        print(recipeCategory)
-        # print(recipeCategory[0]['content'].split(" "))
-        cat = recipeCategory[0]['content']
-        subcat = recipeCategory[1]['content']
-        # cat = [x for x in recipeCategory[0]['content'].split(" ") if x not in ('and', '&')]
-        # subcat = [x for x in recipeCategory[1]['content'].split(" ") if x not in ('and', '&')]
+                with urllib.request.urlopen(url) as response:
+                    soup = BeautifulSoup(response.read(), "html.parser")
 
-        print(cat)
-        print(subcat)
-        #
-        # get ingredients
-        #
+            except urllib.error.HTTPError as e:
+                outputFile.write("{0}: No wine page".format(recipeId))
+                outputFile.write(e.reason)
+                outputFile.write("\n")
+            except urllib.error.URLError as e:
+                outputFile.write("{0}: URL ERROR".format(recipeId))
+                outputFile.write(e.reason)
+                outputFile.write("\n")
+            except SocketError as e:
+                outputFile.write("{0}: SOCKET ERROR".format(recipeId))
+                outputFile.write("\n")
 
-        count = len(ingredientObjects) - 3  # 2 spans with "Add all" and 1 empty
-        ingredients = []
-        for i in range(0, count):
-            ingredientString = ingredientObjects[i].text
+            if soup:
+                titleSpan = soup.find("h1", class_="recipe-summary__h1")
+                servingSpan = soup.find("meta", id="metaRecipeServings")
+                calorieSpan = soup.find("span", class_="calorie-count")
+                directionObjects = soup.find_all("span", class_="recipe-directions__list--item")
+                ingredientObjects = soup.find_all("span", class_="recipe-ingred_txt")
+                footnotesSection = soup.find("section", class_="recipe-footnotes")
+                recipeCategory = soup.find_all("meta", itemprop="recipeCategory")
+                #
+                # get title
+                #
+                print(titleSpan)
+                title = titleSpan.text
+                title = title.replace("Linguini", "Linguine")
+                title = title.replace("Genoese", "Genoise")
 
-            # check if not ingredient, but separator
-            # ie "For Bread:"
-            if ingredientString.find("For ") == 0 or " " not in ingredientString or \
-                    (":" in ingredientString and "eg:" not in ingredientString):
-                continue
+                #
+                # get labels
+                #
+                parsedTitle = title.lower().replace("(", "").replace(")", "").replace("-", " ").split(" ")
+                while "" in parsedTitle:
+                    parsedTitle.remove("")
+                allLabels = getRecipeLabels(parsedTitle)
 
-            ingredient = {}
+                if len(allLabels) == 0:
+                    unlabeledRecipes.add(title)
+                #
+                # get categories
+                #
+                print(recipeCategory)
+                # print(recipeCategory[0]['content'].split(" "))
+                cat = recipeCategory[0]['content']
+                if len(recipeCategory) == 2:
+                    subcat = recipeCategory[1]['content']
+                else:
+                    subcat = "None"
+                # cat = [x for x in recipeCategory[0]['content'].split(" ") if x not in ('and', '&')]
+                # subcat = [x for x in recipeCategory[1]['content'].split(" ") if x not in ('and', '&')]
 
-            ingredient["descriptions"] = []
+                print(cat)
+                print(subcat)
+                #
+                # get ingredients
+                #
 
-            # move parentheses to description
-            while True:
-                parentheses = parenthesesRegex.search(ingredientString)
-                if not parentheses:
-                    break
-                searchString = parentheses.group()
-                ingredientString = ingredientString.replace(searchString, "")
-                ingredient["descriptions"].append(searchString[1:-1])
+                count = len(ingredientObjects) - 3  # 2 spans with "Add all" and 1 empty
+                ingredients = []
+                for i in range(0, count):
+                    ingredientString = ingredientObjects[i].text
 
-            # remove "," and "-" then split ingredient into words
-            ingredientString = ingredientString.replace(",", " and ")
-            ingredientString = ingredientString.replace("-", " ")
-            parsedIngredient = ingredientString.split(" ")
-
-            # remove "", caused by extra spaces
-            while "" in parsedIngredient:
-                parsedIngredient.remove("")
-
-                # move prepositions to description
-            for index in range(0, len(parsedIngredient)):
-                if parsedIngredient[index] in prepositions:
-                    if (index + 1 < len(parsedIngredient) and parsedIngredient[index + 1] == "use") or \
-                            (index > 0 and parsedIngredient[index - 1] == "bone" and parsedIngredient[index] == "in"):
+                    # check if not ingredient, but separator
+                    # ie "For Bread:"
+                    if ingredientString.find("For ") == 0 or " " not in ingredientString or \
+                            (":" in ingredientString and "eg:" not in ingredientString):
                         continue
 
-                    parsedPrepositionalPhrase = parsedIngredient[index:]
-                    ingredient["descriptions"].append(" ".join(parsedPrepositionalPhrase))
-                    parsedIngredient = parsedIngredient[:index]
-                    break
+                    ingredient = {}
 
-            #
-            # get ingredient amount
-            #
+                    ingredient["descriptions"] = []
 
-            ingredient["amount"] = 0
-            while len(parsedIngredient) > 0:
-                # check if current word is number of inches, not amount
-                if len(parsedIngredient) > 1 and parsedIngredient[1] == "inch":
-                    break
+                    # move parentheses to description
+                    while True:
+                        parentheses = parenthesesRegex.search(ingredientString)
+                        if not parentheses:
+                            break
+                        searchString = parentheses.group()
+                        ingredientString = ingredientString.replace(searchString, "")
+                        ingredient["descriptions"].append(searchString[1:-1])
 
-                # get first word
+                    # remove "," and "-" then split ingredient into words
+                    ingredientString = ingredientString.replace(",", " and ")
+                    ingredientString = ingredientString.replace("-", " ")
+                    parsedIngredient = ingredientString.split(" ")
 
-                # if first word is digit or fraction, eval
-                # "x" not multiplier, "%" used as modulo
-                try:
-                    ingredient["amount"] += eval(parsedIngredient[0])
-                    del parsedIngredient[0]
-                except (SyntaxError, NameError, TypeError):
-                    break
+                    # remove "", caused by extra spaces
+                    while "" in parsedIngredient:
+                        parsedIngredient.remove("")
 
-            #
-            # get ingredient unit
-            #
+                        # move prepositions to description
+                    for index in range(0, len(parsedIngredient)):
+                        if parsedIngredient[index] in prepositions:
+                            if (index + 1 < len(parsedIngredient) and parsedIngredient[index + 1] == "use") or \
+                                    (index > 0 and parsedIngredient[index - 1] == "bone" and parsedIngredient[index] == "in"):
+                                continue
 
-            # check words for unit
-            unitString = ""
-            for i in range(0, len(parsedIngredient)):
-                pluralUnit = inCheckingPlurals(parsedIngredient[i], measurementUnits)
-                if pluralUnit:
-                    unitString = pluralUnit
-                    del parsedIngredient[i]
+                            parsedPrepositionalPhrase = parsedIngredient[index:]
+                            ingredient["descriptions"].append(" ".join(parsedPrepositionalPhrase))
+                            parsedIngredient = parsedIngredient[:index]
+                            break
 
-                    if i < len(parsedIngredient) and parsedIngredient[i] == "+":
-                        while "+" in parsedIngredient:
-                            index = parsedIngredient.index("+")
-                            del parsedIngredient[index]
-                            ingredient["amount"] += transformToCups(eval(parsedIngredient[index]),
-                                                                    parsedIngredient[index + 1])
-                            del parsedIngredient[index]
-                            del parsedIngredient[index + 1]
+                    #
+                    # get ingredient amount
+                    #
 
-                    break
+                    ingredient["amount"] = 0
+                    while len(parsedIngredient) > 0:
+                        # check if current word is number of inches, not amount
+                        if len(parsedIngredient) > 1 and parsedIngredient[1] == "inch":
+                            break
 
-            # check for "cake" as unit, but only if "yeast" somewhere in ingredient
-            if "yeast" in parsedIngredient:
-                for word in parsedIngredient:
-                    if equalCheckingPlurals(word, "cakes"):
-                        unitString = "cakes"
-                        parsedIngredient.remove(word)
-                        break
+                        # get first word
 
-            # check if first word in array is "or", then ingredient has 2 possible units
-            if parsedIngredient[0] == "or":
-                pluralUnit = inCheckingPlurals(parsedIngredient[1], measurementUnits)
-                if pluralUnit:
-                    unitString += " " + parsedIngredient[0] + " " + pluralUnit
-                    parsedIngredient = parsedIngredient[2:]
+                        # if first word is digit or fraction, eval
+                        # "x" not multiplier, "%" used as modulo
+                        try:
+                            ingredient["amount"] += eval(parsedIngredient[0])
+                            del parsedIngredient[0]
+                        except (SyntaxError, NameError, TypeError):
+                            break
 
-            # delete "of" at first index, ie "1 cup of milk" -> "1 cup milk"
-            if parsedIngredient[0] == "of":
-                del parsedIngredient[0]
+                    #
+                    # get ingredient unit
+                    #
 
-            ingredient["unit"] = unitString
+                    # check words for unit
+                    unitString = ""
+                    for i in range(0, len(parsedIngredient)):
+                        pluralUnit = inCheckingPlurals(parsedIngredient[i], measurementUnits)
+                        if pluralUnit:
+                            unitString = pluralUnit
+                            del parsedIngredient[i]
 
-            #
-            # get ingredient descriptions
-            #
+                            if i < len(parsedIngredient) and parsedIngredient[i] == "+":
+                                while "+" in parsedIngredient:
+                                    index = parsedIngredient.index("+")
+                                    del parsedIngredient[index]
+                                    ingredient["amount"] += transformToCups(eval(parsedIngredient[index]),
+                                                                            parsedIngredient[index + 1])
+                                    del parsedIngredient[index]
+                                    del parsedIngredient[index + 1]
 
-            # remove useless words
-            for word in parsedIngredient:
-                if word in unnecessaryDescriptions:
-                    parsedIngredient.remove(word)
+                            break
 
-            index = 0
-            while index < len(parsedIngredient):
-                descriptionString = ""
-                word = parsedIngredient[index]
+                    # check for "cake" as unit, but only if "yeast" somewhere in ingredient
+                    if "yeast" in parsedIngredient:
+                        for word in parsedIngredient:
+                            if equalCheckingPlurals(word, "cakes"):
+                                unitString = "cakes"
+                                parsedIngredient.remove(word)
+                                break
 
-                # search through descriptions (adjectives)
-                if word in descriptions:
-                    descriptionString = word
+                    # check if first word in array is "or", then ingredient has 2 possible units
+                    if parsedIngredient[0] == "or":
+                        pluralUnit = inCheckingPlurals(parsedIngredient[1], measurementUnits)
+                        if pluralUnit:
+                            unitString += " " + parsedIngredient[0] + " " + pluralUnit
+                            parsedIngredient = parsedIngredient[2:]
 
-                    # check previous word
-                    if index > 0:
-                        previousWord = parsedIngredient[index - 1]
-                        if previousWord in precedingAdverbs or previousWord[-2:] == "ly":
-                            descriptionString = previousWord + " " + word
-                            parsedIngredient.remove(previousWord)
+                    # delete "of" at first index, ie "1 cup of milk" -> "1 cup milk"
+                    if parsedIngredient[0] == "of":
+                        del parsedIngredient[0]
 
-                    # check next word
-                    elif index + 1 < len(parsedIngredient):
-                        nextWord = parsedIngredient[index + 1]
-                        if nextWord in succeedingAdverbs or nextWord[-2:] == "ly":
-                            descriptionString = word + " " + nextWord
-                            parsedIngredient.remove(nextWord)
+                    ingredient["unit"] = unitString
 
-                # word not in descriptions, check if description with predecessor
-                elif word in descriptionsWithPredecessor and index > 0:
-                    descriptionString = parsedIngredient[index - 1] + " " + word
-                    del parsedIngredient[index - 1]
+                    #
+                    # get ingredient descriptions
+                    #
 
-                # either add description string to descriptions or check next word
-                if descriptionString == "":
-                    index += 1
+                    # remove useless words
+                    for word in parsedIngredient:
+                        if word in unnecessaryDescriptions:
+                            parsedIngredient.remove(word)
+
+                    index = 0
+                    while index < len(parsedIngredient):
+                        descriptionString = ""
+                        word = parsedIngredient[index]
+
+                        # search through descriptions (adjectives)
+                        if word in descriptions:
+                            descriptionString = word
+
+                            # check previous word
+                            if index > 0:
+                                previousWord = parsedIngredient[index - 1]
+                                if previousWord in precedingAdverbs or previousWord[-2:] == "ly":
+                                    descriptionString = previousWord + " " + word
+                                    parsedIngredient.remove(previousWord)
+
+                            # check next word
+                            elif index + 1 < len(parsedIngredient):
+                                nextWord = parsedIngredient[index + 1]
+                                if nextWord in succeedingAdverbs or nextWord[-2:] == "ly":
+                                    descriptionString = word + " " + nextWord
+                                    parsedIngredient.remove(nextWord)
+
+                        # word not in descriptions, check if description with predecessor
+                        elif word in descriptionsWithPredecessor and index > 0:
+                            descriptionString = parsedIngredient[index - 1] + " " + word
+                            del parsedIngredient[index - 1]
+
+                        # either add description string to descriptions or check next word
+                        if descriptionString == "":
+                            index += 1
+                        else:
+                            ingredient["descriptions"].append(descriptionString)
+                            parsedIngredient.remove(word)
+
+                    # remove "and"
+                    while "and" in parsedIngredient:
+                        parsedIngredient.remove("and")
+
+                    # remove "style"
+                    while "style" in parsedIngredient:
+                        parsedIngredient.remove("style")
+
+                    # remove "or" if last word
+                    if parsedIngredient[-1] == "or":
+                        del parsedIngredient[-1]
+
+                    # replace hyphenated prefixes and suffixes
+                    for word in parsedIngredient:
+                        for hypenatedSuffix in hypenatedSuffixes:
+                            if hypenatedSuffix in word:
+                                word = word.replace(hypenatedSuffix, "-" + hypenatedSuffix)
+
+                        for hypenatedPrefix in hypenatedPrefixes:
+                            if word.find(hypenatedPrefix) == 0:
+                                word = word.replace(hypenatedPrefix, hypenatedPrefix + "-")
+
+                    # move various nouns to description
+                    if "powder" in parsedIngredient and \
+                            ("coffee" in parsedIngredient or \
+                             "espresso" in parsedIngredient or \
+                             "tea" in parsedIngredient):
+                        parsedIngredient.remove("powder")
+                        ingredient["descriptions"].append("unbrewed")
+
+                    #
+                    # get ingredient
+                    #
+                    ingredientString = " ".join(parsedIngredient)
+
+                    # remove "*", add footnote to description
+                    if "*" in ingredientString:
+                        ingredient["descriptions"].append("* see footnote")
+                        ingredientString = ingredientString.replace("*", "")
+
+                    # standardize "-" styling
+                    ingredientString = ingredientString.replace("- ", "-")
+                    ingredientString = ingredientString.replace(" -", "-")
+                    ingredientString = ingredientString.replace("Jell O", "Jell-O")
+                    ingredientString = ingredientString.replace("half half", "half-and-half")
+
+                    # remove unnecessary punctuation
+                    ingredientString = ingredientString.replace(".", "")
+                    ingredientString = ingredientString.replace(";", "")
+
+                    # fix spelling errors
+                    ingredientString = ingredientString.replace("linguini", "linguine")
+                    ingredientString = ingredientString.replace("filets", "fillets")
+                    ingredientString = ingredientString.replace("chile", "chili")
+                    ingredientString = ingredientString.replace("chiles", "chilis")
+                    ingredientString = ingredientString.replace("chilies", "chilis")
+                    ingredientString = ingredientString.replace("won ton", "wonton")
+                    ingredientString = ingredientString.replace("liquer", "liqueur")
+                    ingredientString = ingredientString.replace("confectioners ", "confectioners' ")
+                    ingredientString = ingredientString.replace("creme de cacao", "chocolate liquer")
+                    ingredientString = ingredientString.replace("pepperjack", "Pepper Jack")
+                    ingredientString = ingredientString.replace("Pepper jack", "Pepper Jack")
+
+                    # standardize ingredient styling
+                    ingredientString = ingredientString.replace("dressing mix", "dressing")
+                    ingredientString = ingredientString.replace("salad dressing", "dressing")
+                    ingredientString = ingredientString.replace("bourbon whiskey", "bourbon")
+                    ingredientString = ingredientString.replace("pudding mix", "pudding")
+
+                    if ingredientString == "":
+                        outputFile.write("Bad ingredient string: {0}".format(ingredientObjects[i].text))
+                        ingredientString = ingredientObjects[i].text
+
+                    pluralString = inCheckingPlurals(ingredientString, allIngredients)
+                    if pluralString:
+                        ingredientString = pluralString
+                    else:
+                        allIngredients.append(ingredientString)
+
+                    ingredient["ingredient"] = ingredientString
+
+                    #
+                    # get ingredient labels
+                    #
+
+                    ingredientString = ingredientString.replace("-flavored", "")
+                    ingredientString = ingredientString.lower()
+                    ingredient["labels"] = getLabelsFromArray(ingredientString.split(" "))
+
+                    if len(ingredient["labels"]) == 0:
+                        unlabeledIngredients.add(ingredient["ingredient"])
+
+                    ingredients.append(ingredient)
+
+                #
+                # get directions
+                #
+
+                # get number of spans and concatenate all contents to string
+                count = len(directionObjects) - 1  # 1 empty span at end
+                directionsString = directionObjects[0].text
+                for i in range(1, count):
+                    directionsString += " " + directionObjects[i].text
+
+                # use nltk to split direction string into sentences
+                # nltk.download('punkt')
+                # print("finished downloading")
+                directionsArray = sent_tokenize(directionsString)
+                directions = []
+                for i in range(0, len(directionsArray)):
+                    direction = {}
+                    direction["step"] = i
+                    direction["direction"] = directionsArray[i]
+                    directions.append(direction)
+
+                #
+                # get footnotes
+                #
+                footnotes = []
+                if footnotesSection:
+                    for footnote in footnotesSection.find_all("li"):
+                        footnotes.append(footnote.text)
+
+                #
+                # get servings
+                #
+                servings = servingSpan['content'] if servingSpan is not None else None
+                if servings and servings.isdigit():
+                    servings = eval(servings)
                 else:
-                    ingredient["descriptions"].append(descriptionString)
-                    parsedIngredient.remove(word)
+                    servings = 0
 
-            # remove "and"
-            while "and" in parsedIngredient:
-                parsedIngredient.remove("and")
+                #
+                # get calories
+                #
+                calories = calorieSpan.contents[0].text if calorieSpan is not None else None
+                if calories and calories.isdigit():
+                    calories = eval(calories)
+                else:
+                    calories = 0
 
-            # remove "style"
-            while "style" in parsedIngredient:
-                parsedIngredient.remove("style")
+                # write ingredient to JSON file
+                jsonFile.write(json.dumps({"id": recipeId,
+                                           "name": title,
+                                           "ingredients": ingredients,
+                                           "directions": directions,
+                                           "footnotes": footnotes,
+                                           "labels": allLabels,
+                                           "category": cat,
+                                           "subcategory": subcat,
+                                           "servings": servings,
+                                           "calories": calories,
+                                           "wine": suggestedWine}))
+                jsonFile.write("\n")
 
-            # remove "or" if last word
-            if parsedIngredient[-1] == "or":
-                del parsedIngredient[-1]
+                # write data to files every 10 recipes
+                if recipeId:
+                    unlabeledRecipeFile = open("unlabeledRecipes.txt", "w")
+                    unlabeledRecipeFile.truncate()
+                    for string in sorted(unlabeledRecipes):
+                        unlabeledRecipeFile.write("{0}\n".format(string))
+                    unlabeledRecipeFile.close()
 
-            # replace hyphenated prefixes and suffixes
-            for word in parsedIngredient:
-                for hypenatedSuffix in hypenatedSuffixes:
-                    if hypenatedSuffix in word:
-                        word = word.replace(hypenatedSuffix, "-" + hypenatedSuffix)
+                    unlabeledIngredientsFile = open("unlabeledIngredients.txt", "w")
+                    unlabeledIngredientsFile.truncate()
+                    for string in sorted(unlabeledIngredients):
+                        unlabeledIngredientsFile.write("{0}\n".format(string))
+                    unlabeledIngredientsFile.close()
 
-                for hypenatedPrefix in hypenatedPrefixes:
-                    if word.find(hypenatedPrefix) == 0:
-                        word = word.replace(hypenatedPrefix, hypenatedPrefix + "-")
+                    allIngredientsFile = open("allIngredients.txt", "w")
+                    allIngredientsFile.truncate()
+                    for string in sorted(allIngredients):
+                        allIngredientsFile.write("{0}\n".format(string))
+                    allIngredientsFile.close()
 
-            # move various nouns to description
-            if "powder" in parsedIngredient and \
-                    ("coffee" in parsedIngredient or \
-                     "espresso" in parsedIngredient or \
-                     "tea" in parsedIngredient):
-                parsedIngredient.remove("powder")
-                ingredient["descriptions"].append("unbrewed")
-
-            #
-            # get ingredient
-            #
-            ingredientString = " ".join(parsedIngredient)
-
-            # remove "*", add footnote to description
-            if "*" in ingredientString:
-                ingredient["descriptions"].append("* see footnote")
-                ingredientString = ingredientString.replace("*", "")
-
-            # standardize "-" styling
-            ingredientString = ingredientString.replace("- ", "-")
-            ingredientString = ingredientString.replace(" -", "-")
-            ingredientString = ingredientString.replace("Jell O", "Jell-O")
-            ingredientString = ingredientString.replace("half half", "half-and-half")
-
-            # remove unnecessary punctuation
-            ingredientString = ingredientString.replace(".", "")
-            ingredientString = ingredientString.replace(";", "")
-
-            # fix spelling errors
-            ingredientString = ingredientString.replace("linguini", "linguine")
-            ingredientString = ingredientString.replace("filets", "fillets")
-            ingredientString = ingredientString.replace("chile", "chili")
-            ingredientString = ingredientString.replace("chiles", "chilis")
-            ingredientString = ingredientString.replace("chilies", "chilis")
-            ingredientString = ingredientString.replace("won ton", "wonton")
-            ingredientString = ingredientString.replace("liquer", "liqueur")
-            ingredientString = ingredientString.replace("confectioners ", "confectioners' ")
-            ingredientString = ingredientString.replace("creme de cacao", "chocolate liquer")
-            ingredientString = ingredientString.replace("pepperjack", "Pepper Jack")
-            ingredientString = ingredientString.replace("Pepper jack", "Pepper Jack")
-
-            # standardize ingredient styling
-            ingredientString = ingredientString.replace("dressing mix", "dressing")
-            ingredientString = ingredientString.replace("salad dressing", "dressing")
-            ingredientString = ingredientString.replace("bourbon whiskey", "bourbon")
-            ingredientString = ingredientString.replace("pudding mix", "pudding")
-
-            if ingredientString == "":
-                outputFile.write("Bad ingredient string: {0}".format(ingredientObjects[i].text))
-                ingredientString = ingredientObjects[i].text
-
-            pluralString = inCheckingPlurals(ingredientString, allIngredients)
-            if pluralString:
-                ingredientString = pluralString
-            else:
-                allIngredients.append(ingredientString)
-
-            ingredient["ingredient"] = ingredientString
-
-            #
-            # get ingredient labels
-            #
-
-            ingredientString = ingredientString.replace("-flavored", "")
-            ingredientString = ingredientString.lower()
-            ingredient["labels"] = getLabelsFromArray(ingredientString.split(" "))
-
-            if len(ingredient["labels"]) == 0:
-                unlabeledIngredients.add(ingredient["ingredient"])
-
-            ingredients.append(ingredient)
-
-        #
-        # get directions
-        #
-
-        # get number of spans and concatenate all contents to string
-        count = len(directionObjects) - 1  # 1 empty span at end
-        directionsString = directionObjects[0].text
-        for i in range(1, count):
-            directionsString += " " + directionObjects[i].text
-
-        # use nltk to split direction string into sentences
-        # nltk.download('punkt')
-        # print("finished downloading")
-        directionsArray = sent_tokenize(directionsString)
-        directions = []
-        for i in range(0, len(directionsArray)):
-            direction = {}
-            direction["step"] = i
-            direction["direction"] = directionsArray[i]
-            directions.append(direction)
-
-        #
-        # get footnotes
-        #
-        footnotes = []
-        if footnotesSection:
-            for footnote in footnotesSection.find_all("li"):
-                footnotes.append(footnote.text)
-
-        #
-        # get servings
-        #
-        servings = servingSpan['content'] if servingSpan is not None else None
-        if servings and servings.isdigit():
-            servings = eval(servings)
-        else:
-            servings = 0
-
-        #
-        # get calories
-        #
-        calories = calorieSpan.contents[0].text if calorieSpan is not None else None
-        if calories and calories.isdigit():
-            calories = eval(calories)
-        else:
-            calories = 0
-
-        # write ingredient to JSON file
-        jsonFile.write(json.dumps({"id": recipeId,
-                                   "name": title,
-                                   "ingredients": ingredients,
-                                   "directions": directions,
-                                   "footnotes": footnotes,
-                                   "labels": allLabels,
-                                   "category": cat,
-                                   "subcategory": subcat,
-                                   "servings": servings,
-                                   "calories": calories}))
-        jsonFile.write("\n")
-
-        # write data to files every 10 recipes
-        if recipeId:
-            unlabeledRecipeFile = open("unlabeledRecipes.txt", "w")
-            unlabeledRecipeFile.truncate()
-            for string in sorted(unlabeledRecipes):
-                unlabeledRecipeFile.write("{0}\n".format(string))
-            unlabeledRecipeFile.close()
-
-            unlabeledIngredientsFile = open("unlabeledIngredients.txt", "w")
-            unlabeledIngredientsFile.truncate()
-            for string in sorted(unlabeledIngredients):
-                unlabeledIngredientsFile.write("{0}\n".format(string))
-            unlabeledIngredientsFile.close()
-
-            allIngredientsFile = open("allIngredients.txt", "w")
-            allIngredientsFile.truncate()
-            for string in sorted(allIngredients):
-                allIngredientsFile.write("{0}\n".format(string))
-            allIngredientsFile.close()
-
-            print(recipeId)
+                    print(recipeId)
 
 jsonFile.close()
 outputFile.close()
